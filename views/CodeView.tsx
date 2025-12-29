@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CheckCircle } from 'lucide-react';
-import { useCodeStore, Problem } from '../store/useCodeStore';
+import { useCodeStore } from '../store/useCodeStore';
 import { PlaylistView } from '../components/code/PlaylistView';
 import { SplitWorkspace } from '../components/code/SplitWorkspace';
 
@@ -16,19 +16,19 @@ export const CodeView: React.FC = () => {
   useEffect(() => {
     // Only import if we only have the default few problems
     if (problems.length <= 5) {
-      const initialProblems: (Omit<Problem, 'id' | 'isSolved'> & { category?: string })[] = [
+      const initialProblems = [
         // Two Pointers
-        { title: 'Shortest Word Distance', url: 'https://leetcode.com/problems/shortest-word-distance', difficulty: 'Easy', category: 'Two Pointers' },
-        { title: 'Majority Element', url: 'https://leetcode.com/problems/majority-element', difficulty: 'Easy', category: 'Array & Hashing' },
-        { title: 'Rotate Array', url: 'https://leetcode.com/problems/rotate-array', difficulty: 'Medium', category: 'Two Pointers' },
-        { title: 'Merge Intervals', url: 'https://leetcode.com/problems/merge-intervals', difficulty: 'Medium', category: 'Intervals' },
-        { title: '3Sum', url: 'https://leetcode.com/problems/3sum', difficulty: 'Medium', category: 'Two Pointers' },
-        { title: 'Minimum Window Substring', url: 'https://leetcode.com/problems/minimum-window-substring', difficulty: 'Hard', category: 'Sliding Window' },
-        { title: 'Trapping Rain Water', url: 'https://leetcode.com/problems/trapping-rain-water', difficulty: 'Hard', category: 'Two Pointers' },
+        { title: 'Shortest Word Distance', url: 'https://leetcode.com/problems/shortest-word-distance', difficulty: 'Easy', category: 'Two Pointers' } as const,
+        { title: 'Majority Element', url: 'https://leetcode.com/problems/majority-element', difficulty: 'Easy', category: 'Array & Hashing' } as const,
+        { title: 'Rotate Array', url: 'https://leetcode.com/problems/rotate-array', difficulty: 'Medium', category: 'Two Pointers' } as const,
+        { title: 'Merge Intervals', url: 'https://leetcode.com/problems/merge-intervals', difficulty: 'Medium', category: 'Intervals' } as const,
+        { title: '3Sum', url: 'https://leetcode.com/problems/3sum', difficulty: 'Medium', category: 'Two Pointers' } as const,
+        { title: 'Minimum Window Substring', url: 'https://leetcode.com/problems/minimum-window-substring', difficulty: 'Hard', category: 'Sliding Window' } as const,
+        { title: 'Trapping Rain Water', url: 'https://leetcode.com/problems/trapping-rain-water', difficulty: 'Hard', category: 'Two Pointers' } as const,
         // Add a few more to populate the initial UI
-        { title: 'Product of Array Except Self', url: 'https://leetcode.com/problems/product-of-array-except-self', difficulty: 'Medium', category: 'Array & Hashing' },
-        { title: 'Longest Substring Without Repeating Characters', url: 'https://leetcode.com/problems/longest-substring-without-repeating-characters', difficulty: 'Medium', category: 'Sliding Window' },
-        { title: 'First Missing Positive', url: 'https://leetcode.com/problems/first-missing-positive', difficulty: 'Hard', category: 'Cyclic Sort' },
+        { title: 'Product of Array Except Self', url: 'https://leetcode.com/problems/product-of-array-except-self', difficulty: 'Medium', category: 'Array & Hashing' } as const,
+        { title: 'Longest Substring Without Repeating Characters', url: 'https://leetcode.com/problems/longest-substring-without-repeating-characters', difficulty: 'Medium', category: 'Sliding Window' } as const,
+        { title: 'First Missing Positive', url: 'https://leetcode.com/problems/first-missing-positive', difficulty: 'Hard', category: 'Cyclic Sort' } as const,
       ];
       importProblems(initialProblems);
     }
