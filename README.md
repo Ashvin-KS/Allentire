@@ -27,3 +27,17 @@ The `python setup.py` script will automatically create a `.env` file for you. Th
 - `VITE_A4F_API_KEY`: Token for Brain View AI.
 - `GOOGLE_CLIENT_ID`: OAuth Client ID for Google Calendar/Tasks.
 - `GOOGLE_CLIENT_SECRET`: OAuth Client Secret for Google Calendar/Tasks.
+
+## Run as Desktop App (Electron)
+
+You can also run this application as a standalone desktop app using Electron.
+
+### Development Mode
+To run the desktop app in development mode:
+`npm run electron:dev`
+
+### Build Desktop App
+To build the application for your operating system:
+`npm run electron:build`
+
+The build artifacts will be located in the `dist` and `dist-electron` folders.

@@ -192,9 +192,13 @@ export const NotesApp: React.FC = () => {
     // Default to the Notes folder in the project
     const DEFAULT_VAULT = 'c:\\myself\\nonclgstuffs\\webdev\\all-in-one\\Notes';
 
-    const [vaultPath, setVaultPath] = useState<string | null>(null);
+    const [vaultPath, setVaultPath] = useState<string | null>(() => {
+        return localStorage.getItem('notes_vaultPath') || DEFAULT_VAULT;
+    });
     const [fileTree, setFileTree] = useState<FileNode[]>([]);
-    const [selectedFile, setSelectedFile] = useState<string | null>(null);
+    const [selectedFile, setSelectedFile] = useState<string | null>(() => {
+        return localStorage.getItem('notes_selectedFile');
+    });
     const [fileContent, setFileContent] = useState<string>('');
     const [isEditing, setIsEditing] = useState(false);
     const [editContent, setEditContent] = useState('');
@@ -207,11 +211,8 @@ export const NotesApp: React.FC = () => {
     // Auto-connect to default vault or saved vault
     useEffect(() => {
         const saved = localStorage.getItem('notes_vaultPath');
-        if (saved) {
-            setVaultPath(saved);
-        } else {
-            // Auto-connect to the default Notes folder
-            setVaultPath(DEFAULT_VAULT);
+        if (!saved) {
+            // Only set default if nothing is saved
             localStorage.setItem('notes_vaultPath', DEFAULT_VAULT);
         }
     }, []);
@@ -220,6 +221,9 @@ export const NotesApp: React.FC = () => {
     useEffect(() => {
         if (vaultPath && window.nexusAPI?.notes) {
             loadFileTree();
+            if (selectedFile) {
+                openFile(selectedFile);
+            }
         }
     }, [vaultPath]);
 
@@ -246,6 +250,7 @@ export const NotesApp: React.FC = () => {
         const content = await window.nexusAPI.notes.readFile(filePath);
         if (content !== null) {
             setSelectedFile(filePath);
+            localStorage.setItem('notes_selectedFile', filePath);
             setFileContent(content);
             setIsEditing(false);
         }

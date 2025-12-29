@@ -65,6 +65,10 @@ interface FileNode {
 function getDirectoryTree(dirPath: string): FileNode[] {
     const items: FileNode[] = [];
 
+    if (!dirPath || !fs.existsSync(dirPath)) {
+        return items;
+    }
+
     try {
         const entries = fs.readdirSync(dirPath, { withFileTypes: true });
 
@@ -152,6 +156,18 @@ ipcMain.handle('notes:createFolder', async (_, dirPath: string, folderName: stri
     }
 });
 
+// Ensure directory exists (creates recursively if needed)
+ipcMain.handle('notes:ensureDir', async (_, dirPath: string) => {
+    try {
+        if (!fs.existsSync(dirPath)) {
+            fs.mkdirSync(dirPath, { recursive: true });
+        }
+        return { success: true };
+    } catch (err: any) {
+        return { success: false, error: err.message };
+    }
+});
+
 // Delete file or folder
 ipcMain.handle('notes:delete', async (_, itemPath: string) => {
     try {
@@ -199,6 +215,18 @@ ipcMain.handle('notes:moveFile', async (_, sourcePath: string, destinationPath: 
         return { success: true, newPath };
     } catch (err: any) {
         return { success: false, error: err.message };
+    }
+});
+
+// ========== LEETCODE CSV IPC HANDLER ==========
+ipcMain.handle('leetcode:readCsv', async () => {
+    try {
+        const csvPath = path.join(app.getAppPath(), 'leetcode_problems.csv');
+        if (!fs.existsSync(csvPath)) return null;
+        return fs.readFileSync(csvPath, 'utf-8');
+    } catch (err) {
+        console.error('Error reading LeetCode CSV:', err);
+        return null;
     }
 });
 

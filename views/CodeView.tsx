@@ -22,7 +22,10 @@ import {
   Layers,
   StopCircle,
   ChevronDown,
-  GripVertical
+  GripVertical,
+  LayoutGrid,
+  RefreshCw,
+  Search
 } from 'lucide-react';
 import { useCodeStore, Problem } from '../store/useCodeStore';
 
@@ -78,7 +81,7 @@ const MiniMarkdown: React.FC<{ content: string }> = ({ content }) => (
 
 
 export const CodeView: React.FC = () => {
-  const { problems, activeProblemId, setActiveProblem, addProblem, removeProblem, toggleSolved } = useCodeStore();
+  const { problems, activeProblemId, setActiveProblem, addProblem, removeProblem, toggleSolved, selectedCategory, setSelectedCategory, importFromCsv } = useCodeStore();
   const activeProblem = problems.find(p => p.id === activeProblemId) || null;
 
   const [showToast, setShowToast] = useState(false);
@@ -90,24 +93,64 @@ export const CodeView: React.FC = () => {
     setTimeout(() => setShowToast(false), 3000);
   };
 
+  const handleSyncCsv = async () => {
+    try {
+      // @ts-ignore
+      const leetcodeApi = window.nexusAPI?.leetcode;
+      if (!leetcodeApi) {
+        console.warn("LeetCode API not found on window.nexusAPI");
+        return false;
+      }
+
+      const csvContent = await leetcodeApi.readCsv();
+      if (csvContent) {
+        importFromCsv(csvContent);
+        showNotification("Problems synced from CSV!");
+        return true;
+      } else {
+        showNotification("Could not find CSV file.");
+        return false;
+      }
+    } catch (err) {
+      console.error(err);
+      showNotification("Sync failed.");
+      return false;
+    }
+  };
+
+  // Auto-sync on mount if only default problems exist or if list is empty
+  useEffect(() => {
+    if (problems.length <= 2) {
+      handleSyncCsv();
+    }
+  }, []);
+
   return (
     <div className="relative w-full h-full bg-[#0a0a0a] overflow-hidden rounded-xl border border-[#262626]">
       <AnimatePresence mode="wait">
-        {!activeProblem ? (
-          <PlaylistView
-            key="playlist"
-            problems={problems}
-            onSelect={(id) => setActiveProblem(id)}
-            onAdd={addProblem}
-            onRemove={removeProblem}
-            onToggle={toggleSolved}
-          />
-        ) : (
+        {activeProblem ? (
           <SplitWorkspace
             key="workspace"
             problem={activeProblem}
             onBack={() => setActiveProblem(null)}
             onNotify={showNotification}
+          />
+        ) : !selectedCategory ? (
+          <CategoryGrid
+            key="categories"
+            problems={problems}
+            onSelectCategory={setSelectedCategory}
+            onSync={handleSyncCsv}
+          />
+        ) : (
+          <ProblemListView
+            key="problems"
+            category={selectedCategory}
+            problems={problems.filter(p => p.category === selectedCategory)}
+            onBack={() => setSelectedCategory(null)}
+            onSelectProblem={setActiveProblem}
+            onToggleSolved={toggleSolved}
+            onRemove={removeProblem}
           />
         )}
       </AnimatePresence>
@@ -132,164 +175,226 @@ export const CodeView: React.FC = () => {
   );
 };
 
-// --- Sub-View: Playlist ---
+// --- Sub-View: Category Grid ---
 
-interface PlaylistProps {
+interface CategoryGridProps {
   problems: Problem[];
-  onSelect: (id: string) => void;
-  onAdd: (problem: Omit<Problem, 'id' | 'isSolved'>) => void;
-  onRemove: (id: string) => void;
-  onToggle: (id: string) => void;
+  onSelectCategory: (cat: string) => void;
+  onSync: () => void;
 }
 
-const PlaylistView: React.FC<PlaylistProps> = ({ problems, onSelect, onAdd, onRemove, onToggle }) => {
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newProblem, setNewProblem] = useState({ title: '', url: '', difficulty: 'Medium' as Problem['difficulty'] });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newProblem.title && newProblem.url) {
-      onAdd({
-        title: newProblem.title,
-        url: newProblem.url,
-        difficulty: newProblem.difficulty
-      });
-      setShowAddModal(false);
-      setNewProblem({ title: '', url: '', difficulty: 'Medium' });
-    }
-  };
+const CategoryGrid: React.FC<CategoryGridProps> = ({ problems, onSelectCategory, onSync }) => {
+  const categories = Array.from(new Set(problems.map(p => p.category || 'Other'))).sort();
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.2 }}
-      className="h-full w-full flex flex-col items-center p-8 overflow-y-auto custom-scrollbar"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="h-full w-full flex flex-col p-8 overflow-y-auto custom-scrollbar"
     >
-      <div className="w-full max-w-2xl">
-        <div className="mb-8 text-center relative">
-          <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Today's Grind</h1>
-          <p className="text-gray-500">Select a problem to start your session.</p>
-
+      <div className="max-w-5xl mx-auto w-full">
+        <div className="flex justify-between items-center mb-10">
+          <div>
+            <h1 className="text-4xl font-black text-white tracking-tighter mb-2">Leet Code Grind</h1>
+            <p className="text-gray-500 text-sm">Select a category to view problems and start practice.</p>
+          </div>
           <button
-            onClick={() => setShowAddModal(true)}
-            className="absolute right-0 top-0 bg-[#262626] hover:bg-[#333] text-gray-300 p-2 rounded-lg transition-colors border border-[#333]"
-            title="Add Problem"
+            onClick={onSync}
+            className="flex items-center gap-2 px-4 py-2 bg-[#1a1a1a] hover:bg-[#262626] text-gray-300 border border-[#333] rounded-lg transition-all active:scale-95"
           >
-            <Plus size={20} />
+            <RefreshCw size={16} />
+            <span className="text-xs font-bold uppercase tracking-wider">Sync CSV</span>
           </button>
         </div>
 
-        {/* Add Problem Form */}
-        <AnimatePresence>
-          {showAddModal && (
-            <motion.form
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              onSubmit={handleSubmit}
-              className="bg-[#161616] border border-[#333] p-4 rounded-xl mb-6 overflow-hidden"
-            >
-              <div className="flex flex-col gap-3">
-                <input
-                  type="text"
-                  placeholder="Problem Title"
-                  className="bg-[#0a0a0a] border border-[#262626] rounded px-3 py-2 text-white focus:border-emerald-500 outline-none"
-                  value={newProblem.title}
-                  onChange={e => setNewProblem({ ...newProblem, title: e.target.value })}
-                  required
-                />
-                <input
-                  type="url"
-                  placeholder="LeetCode URL"
-                  className="bg-[#0a0a0a] border border-[#262626] rounded px-3 py-2 text-white focus:border-emerald-500 outline-none"
-                  value={newProblem.url}
-                  onChange={e => setNewProblem({ ...newProblem, url: e.target.value })}
-                  required
-                />
-                <div className="flex gap-2">
-                  <select
-                    className="bg-[#0a0a0a] border border-[#262626] rounded px-3 py-2 text-gray-300 outline-none flex-1"
-                    value={newProblem.difficulty}
-                    onChange={e => setNewProblem({ ...newProblem, difficulty: e.target.value as any })}
-                  >
-                    <option value="Easy">Easy</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Hard">Hard</option>
-                  </select>
-                  <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 text-gray-400 hover:text-white">Cancel</button>
-                  <button type="submit" className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-medium">Add</button>
-                </div>
-              </div>
-            </motion.form>
-          )}
-        </AnimatePresence>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {categories.map((cat, idx) => {
+            const catProblems = problems.filter(p => (p.category || 'Other') === cat);
+            const solvedCount = catProblems.filter(p => p.isSolved).length;
+            const progress = (solvedCount / catProblems.length) * 100;
 
-        <div className="flex flex-col gap-3 pb-10">
-          {problems.map((problem, index) => (
-            <motion.div
-              key={problem.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-              className="group bg-[#161616] border border-[#262626] hover:border-cyan-500/50 hover:bg-[#1a1a1a] p-5 rounded-xl cursor-pointer transition-all duration-300 flex items-center justify-between shadow-lg hover:shadow-cyan-900/10 hover:scale-[1.01] relative"
-            >
-              <div className="flex items-center gap-4 flex-1" onClick={() => onSelect(problem.id)}>
-                <div className={`
-                  w-2 h-12 rounded-full 
-                  ${problem.difficulty === 'Easy' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]' :
-                    problem.difficulty === 'Medium' ? 'bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.4)]' :
-                      'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.4)]'}
-                `}></div>
+            return (
+              <motion.div
+                key={cat}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: idx * 0.03 }}
+                onClick={() => onSelectCategory(cat)}
+                className="group relative bg-[#111] border border-[#262626] hover:border-cyan-500/50 p-6 rounded-2xl cursor-pointer transition-all duration-300 hover:bg-[#161616] overflow-hidden"
+              >
+                <div className="absolute top-0 left-0 w-1 h-full bg-cyan-500/20 group-hover:bg-cyan-500 transition-colors" />
 
-                <div className="flex-1">
-                  <div className="flex items-center gap-3">
-                    <h3 className={`text-lg font-bold transition-colors ${problem.isSolved ? 'text-emerald-400 line-through decoration-emerald-500/50' : 'text-gray-200 group-hover:text-cyan-400'}`}>
-                      {problem.title}
-                    </h3>
-                    {problem.isSolved && <CheckCircle size={14} className="text-emerald-500" />}
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-2 bg-cyan-500/10 rounded-lg text-cyan-400 group-hover:bg-cyan-500 group-hover:text-black transition-colors">
+                    <LayoutGrid size={20} />
                   </div>
-                  <span className={`
-                    text-xs font-mono uppercase tracking-wider
-                    ${problem.difficulty === 'Easy' ? 'text-emerald-500' :
-                      problem.difficulty === 'Medium' ? 'text-orange-500' :
-                        'text-red-500'}
-                  `}>
-                    {problem.difficulty}
+                  <span className="text-[10px] font-mono text-gray-500 bg-[#0a0a0a] px-2 py-1 rounded-full border border-[#222]">
+                    {catProblems.length} PROBLEMS
                   </span>
                 </div>
-              </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={(e) => { e.stopPropagation(); onToggle(problem.id); }}
-                  className={`p-2 rounded-lg outline-none transition-colors ${problem.isSolved ? 'text-emerald-500 bg-emerald-500/10' : 'text-gray-600 hover:text-emerald-400'}`}
-                  title={problem.isSolved ? "Mark Unsolved" : "Mark Solved"}
-                >
-                  <CheckCircle size={18} />
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onRemove(problem.id); }}
-                  className="p-2 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all rounded-lg hover:bg-red-500/10"
-                  title="Delete"
-                >
-                  <Trash2 size={18} />
-                </button>
-                <div
-                  onClick={() => onSelect(problem.id)}
-                  className="w-10 h-10 rounded-full bg-[#262626] flex items-center justify-center group-hover:bg-cyan-500 group-hover:text-black transition-colors ml-2"
-                >
-                  <ChevronRight size={20} />
+                <h3 className="text-xl font-bold text-white mb-1 group-hover:text-cyan-400 transition-colors">
+                  {cat}
+                </h3>
+
+                <div className="mt-6">
+                  <div className="flex justify-between items-center text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-widest">
+                    <span>Progress</span>
+                    <span>{Math.round(progress)}%</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-[#262626] rounded-full overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${progress}%` }}
+                      className="h-full bg-cyan-500"
+                    />
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            );
+          })}
         </div>
       </div>
     </motion.div>
   );
 };
+
+// --- Sub-View: Problem List ---
+
+interface ProblemListProps {
+  category: string;
+  problems: Problem[];
+  onBack: () => void;
+  onSelectProblem: (id: string) => void;
+  onToggleSolved: (id: string) => void;
+  onRemove: (id: string) => void;
+}
+
+const ProblemListView: React.FC<ProblemListProps> = ({ category, problems, onBack, onSelectProblem, onToggleSolved, onRemove }) => {
+  const incomplete = problems.filter(p => !p.isSolved);
+  const completed = problems.filter(p => p.isSolved);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      className="h-full w-full flex flex-col p-8 overflow-hidden"
+    >
+      <div className="flex items-center gap-4 mb-8">
+        <button
+          onClick={onBack}
+          className="p-2 bg-[#1a1a1a] hover:bg-[#262626] text-gray-400 hover:text-white rounded-xl transition-colors border border-[#333]"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <div>
+          <h2 className="text-2xl font-black text-white tracking-tight">{category}</h2>
+          <p className="text-gray-500 text-xs uppercase tracking-widest font-bold">Problem Set</p>
+        </div>
+      </div>
+
+      <div className="flex-1 grid grid-cols-2 gap-8 min-h-0">
+        {/* Incomplete Column */}
+        <div className="flex flex-col min-h-0">
+          <div className="flex items-center justify-between mb-4 px-2">
+            <h3 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">Incomplete</h3>
+            <span className="text-[10px] bg-red-500/10 text-red-400 px-2 py-0.5 rounded-full border border-red-500/20">
+              {incomplete.length}
+            </span>
+          </div>
+          <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 flex flex-col gap-2">
+            {incomplete.map(problem => (
+              <ProblemCard
+                key={`incomplete-${problem.id}`}
+                problem={problem}
+                onSelect={() => onSelectProblem(problem.id)}
+                onToggle={() => onToggleSolved(problem.id)}
+                onRemove={() => onRemove(problem.id)}
+              />
+            ))}
+            {incomplete.length === 0 && (
+              <div className="h-32 border-2 border-dashed border-[#1a1a1a] rounded-2xl flex items-center justify-center text-gray-600 text-sm italic">
+                All caught up!
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Completed Column */}
+        <div className="flex flex-col min-h-0">
+          <div className="flex items-center justify-between mb-4 px-2">
+            <h3 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">Completed</h3>
+            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20">
+              {completed.length}
+            </span>
+          </div>
+          <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 flex flex-col gap-2 opacity-60 hover:opacity-100 transition-opacity">
+            {completed.map(problem => (
+              <ProblemCard
+                key={`completed-${problem.id}`}
+                problem={problem}
+                onSelect={() => onSelectProblem(problem.id)}
+                onToggle={() => onToggleSolved(problem.id)}
+                onRemove={() => onRemove(problem.id)}
+              />
+            ))}
+            {completed.length === 0 && (
+              <div className="h-32 border-2 border-dashed border-[#1a1a1a] rounded-2xl flex items-center justify-center text-gray-600 text-sm italic">
+                None completed yet.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const ProblemCard: React.FC<{ problem: Problem, onSelect: () => void, onToggle: () => void, onRemove: () => void }> = ({ problem, onSelect, onToggle, onRemove }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: -10 }}
+    transition={{ duration: 0.2 }}
+    className="group bg-[#111] border border-[#222] hover:border-cyan-500/30 p-4 rounded-xl cursor-pointer transition-all hover:bg-[#161616] flex items-center justify-between"
+    onClick={onSelect}
+  >
+    <div className="flex items-center gap-3 flex-1 min-w-0">
+      <div className={`w-1 h-8 rounded-full ${problem.difficulty === 'Easy' ? 'bg-emerald-500' :
+        problem.difficulty === 'Medium' ? 'bg-orange-500' : 'bg-red-500'
+        }`} />
+      <div className="min-w-0">
+        <h4 className={`text-sm font-bold truncate ${problem.isSolved ? 'text-gray-500 line-through' : 'text-gray-200 group-hover:text-cyan-400'}`}>
+          {problem.title}
+        </h4>
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className="text-[9px] font-mono text-gray-500 uppercase">{problem.difficulty}</span>
+          {problem.technique && (
+            <span className="text-[9px] text-gray-600 truncate">• {problem.technique}</span>
+          )}
+        </div>
+      </div>
+    </div>
+
+    <div className="flex items-center gap-1">
+      <button
+        onClick={(e) => { e.stopPropagation(); onToggle(); }}
+        className={`p-1.5 rounded-lg transition-colors ${problem.isSolved ? 'text-emerald-500 bg-emerald-500/10' : 'text-gray-600 hover:text-emerald-400'}`}
+      >
+        <CheckCircle size={14} />
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); onRemove(); }}
+        className="p-1.5 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+      >
+        <Trash2 size={14} />
+      </button>
+    </div>
+  </motion.div>
+);
+
 
 // --- Sub-View: Split Workspace ---
 
@@ -309,10 +414,19 @@ const SplitWorkspace: React.FC<WorkspaceProps> = ({ problem, onBack, onNotify })
   const [aiInput, setAiInput] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiResponse, setAiResponse] = useState<AiResponse | null>(null);
-  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
+  const [selectedModel, setSelectedModel] = useState('provider-5/gpt-oss-120b');
   const [availableModels, setAvailableModels] = useState<{ id: string }[]>([]);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  const [showFileExistsModal, setShowFileExistsModal] = useState(false);
+  const [pendingSaveData, setPendingSaveData] = useState<{
+    fullPath: string;
+    fileName: string;
+    category: string;
+    newEntry: string;
+    existingContent: string;
+  } | null>(null);
 
   // Resizable Panels
   const [leftPanelWidth, setLeftPanelWidth] = useState(50); // percentage
@@ -331,10 +445,15 @@ const SplitWorkspace: React.FC<WorkspaceProps> = ({ problem, onBack, onNotify })
         const data = await response.json();
         if (data.data) {
           setAvailableModels(data.data);
-          if (data.data.length > 0) setSelectedModel(data.data[0].id);
+          const hasTargetModel = data.data.some((m: any) => m.id === 'provider-5/gpt-oss-120b');
+          if (hasTargetModel) {
+            setSelectedModel('provider-5/gpt-oss-120b');
+          } else if (data.data.length > 0) {
+            setSelectedModel(data.data[0].id);
+          }
         }
       } catch (e) {
-        setAvailableModels([{ id: 'gpt-4o-mini' }]);
+        setAvailableModels([{ id: 'provider-5/gpt-oss-120b' }]);
       }
     };
     fetchModels();
@@ -395,40 +514,150 @@ const SplitWorkspace: React.FC<WorkspaceProps> = ({ problem, onBack, onNotify })
   const handleGoForward = () => webviewRef.current?.canGoForward() && webviewRef.current.goForward();
   const handleReload = () => webviewRef.current?.reload();
 
-  const handleSaveNotes = async () => {
+  const handleSaveNotes = async (skipAiCheck = false) => {
+    // If no AI response and not explicitly skipping, show custom confirm modal
+    if (!aiResponse && !skipAiCheck) {
+      setShowSaveConfirm(true);
+      return;
+    }
+
     updateNotes(problem.id, notes);
     try {
-      // @ts-ignore
-      const vaultPath = await window.nexusAPI.notes.selectVault();
-      if (!vaultPath) {
+      // Use a fixed LeetCode notes directory structure
+      const category = (problem.category || 'Uncategorized').replace(/[^a-z0-9\s&]/gi, '').trim();
+      const problemName = problem.title.replace(/[^a-z0-9]/gi, '_');
+      const date = new Date().toISOString().split('T')[0];
+      const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+      // Get vault path from localStorage (same as BrainView) or prompt if not set
+      let basePath = localStorage.getItem('brain_vaultPath');
+
+      if (!basePath) {
+        // First time: ask user to select a vault (will be remembered for BrainView too)
+        // @ts-ignore
+        basePath = await window.nexusAPI.notes.selectVault();
+        if (basePath) {
+          localStorage.setItem('brain_vaultPath', basePath);
+        }
+      }
+
+      if (!basePath) {
         onNotify("Note saved internally (No folder selected)");
         return;
       }
-      const date = new Date().toISOString().split('T')[0];
-      const fileName = `${problem.title.replace(/[^a-z0-9]/gi, '_')}.md`;
 
-      // Include AI response if available
-      let aiSection = '';
-      if (aiResponse) {
-        aiSection = `\n## AI Analysis\n\n### Explanation\n${aiResponse.explanation}\n\n### Code\n\`\`\`\n${aiResponse.code}\n\`\`\`\n\n### Pattern\n${aiResponse.pattern}\n`;
+      const leetcodePath = `${basePath}/LeetCode`;
+      const categoryPath = `${leetcodePath}/${category}`;
+      const fileName = `${problemName}.md`;
+      const fullPath = `${categoryPath}/${fileName}`;
+
+      // Ensure directories exist
+      // @ts-ignore
+      await window.nexusAPI.notes.ensureDir(categoryPath);
+
+      // Check if file exists and read existing content
+      let existingContent = '';
+      try {
+        // @ts-ignore
+        existingContent = await window.nexusAPI.notes.readFile(fullPath) || '';
+      } catch {
+        // File doesn't exist yet, will create new
       }
 
-      const content = `# ${problem.title}\n\nURL: ${problem.url}\nDifficulty: ${problem.difficulty}\nDate: ${date}\n${aiSection}\n## My Notes\n\n${notes}`;
-      const fullPath = `${vaultPath}/${fileName}`;
+      // Build the new entry
+      let newEntry = `\n---\n\n## Session: ${date} at ${time}\n\n`;
+
+      // User's notes first
+      if (notes.trim()) {
+        newEntry += `### My Notes\n\n${notes}\n\n`;
+      }
+
+      // AI Analysis second (explanation + code + pattern)
+      if (aiResponse) {
+        newEntry += `### AI Analysis\n\n`;
+        newEntry += `**Pattern/Technique:** ${aiResponse.pattern}\n\n`;
+        newEntry += `#### Explanation\n${aiResponse.explanation}\n\n`;
+        newEntry += `#### Code\n\`\`\`python\n${aiResponse.code}\n\`\`\`\n`;
+      }
+
+      // If file exists, show modal to ask user what to do
+      if (existingContent.trim()) {
+        setPendingSaveData({
+          fullPath,
+          fileName,
+          category,
+          newEntry,
+          existingContent
+        });
+        setShowFileExistsModal(true);
+        return;
+      }
+
+      // File is new, create with header
+      let finalContent = `# ${problem.title}\n\n`;
+      finalContent += `**URL:** ${problem.url}\n`;
+      finalContent += `**Difficulty:** ${problem.difficulty}\n`;
+      finalContent += `**Category:** ${category}\n`;
+      if (problem.technique) {
+        finalContent += `**Technique:** ${problem.technique}\n`;
+      }
+      finalContent += newEntry;
+
       // @ts-ignore
-      await window.nexusAPI.notes.writeFile(fullPath, content);
-      onNotify(`Saved to ${fileName}`);
+      await window.nexusAPI.notes.writeFile(fullPath, finalContent);
+      onNotify(`Saved to LeetCode/${category}/${fileName}`);
     } catch (e) {
       console.error("Save failed:", e);
       onNotify("Error saving to disk");
     }
   };
 
-  const handleAiSend = async () => {
-    if (!aiInput.trim() || isAiLoading) return;
+  // Handle file exists modal actions
+  const handleFileExistsAction = async (action: 'replace' | 'append' | 'cancel') => {
+    setShowFileExistsModal(false);
+
+    if (action === 'cancel' || !pendingSaveData) {
+      setPendingSaveData(null);
+      return;
+    }
+
+    const { fullPath, fileName, category, newEntry, existingContent } = pendingSaveData;
+
+    try {
+      let finalContent = '';
+
+      if (action === 'replace') {
+        // Create fresh file with header and new entry only
+        finalContent = `# ${problem.title}\n\n`;
+        finalContent += `**URL:** ${problem.url}\n`;
+        finalContent += `**Difficulty:** ${problem.difficulty}\n`;
+        finalContent += `**Category:** ${category}\n`;
+        if (problem.technique) {
+          finalContent += `**Technique:** ${problem.technique}\n`;
+        }
+        finalContent += newEntry;
+      } else {
+        // Append to existing content
+        finalContent = existingContent + newEntry;
+      }
+
+      // @ts-ignore
+      await window.nexusAPI.notes.writeFile(fullPath, finalContent);
+      onNotify(`${action === 'replace' ? 'Replaced' : 'Appended to'} LeetCode/${category}/${fileName}`);
+    } catch (e) {
+      console.error("Save failed:", e);
+      onNotify("Error saving to disk");
+    } finally {
+      setPendingSaveData(null);
+    }
+  };
+
+  const handleAiSend = async (customPrompt?: string) => {
+    const promptToSend = customPrompt || aiInput.trim();
+    if (!promptToSend || isAiLoading) return;
 
     abortControllerRef.current = new AbortController();
-    const userMessage = aiInput.trim();
+    const userMessage = promptToSend;
     setAiInput('');
     setIsAiLoading(true);
     setAiResponse(null);
@@ -753,7 +982,7 @@ Your response must be ONLY valid JSON. Do not include any text before or after t
                 className="flex-1 bg-[#0a0a0a] border border-[#333] text-gray-300 rounded-lg pl-3 pr-3 py-2.5 text-sm focus:outline-none focus:border-purple-500/50 transition-colors"
               />
               <button
-                onClick={handleAiSend}
+                onClick={() => handleAiSend()}
                 disabled={isAiLoading}
                 className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg font-medium text-sm transition-colors"
               >
@@ -795,16 +1024,145 @@ Your response must be ONLY valid JSON. Do not include any text before or after t
 
           <div className="p-4 border-t border-[#262626] bg-[#0a0a0a] shrink-0">
             <button
-              onClick={handleSaveNotes}
+              onClick={() => handleSaveNotes()}
               className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg shadow-emerald-900/20 active:scale-[0.98] transition-all"
             >
               <Save size={16} />
-              Save to Obsidian
+              Save Notes & AI
             </button>
           </div>
         </div>
 
       </div>
+
+      {/* Custom Save Confirmation Modal */}
+      <AnimatePresence>
+        {showSaveConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50"
+            onClick={() => setShowSaveConfirm(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-[#161616] border border-[#333] rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Icon */}
+              <div className="w-14 h-14 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mx-auto mb-4">
+                <MessageSquare size={24} className="text-orange-400" />
+              </div>
+
+              {/* Title */}
+              <h3 className="text-xl font-bold text-white text-center mb-2">
+                No AI Response Yet
+              </h3>
+
+              {/* Description */}
+              <p className="text-gray-400 text-center text-sm mb-6 leading-relaxed">
+                You haven't asked the AI for help with this problem yet.
+                Would you like to save just your notes, or go back to get AI analysis first?
+              </p>
+
+              {/* Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowSaveConfirm(false);
+                    handleAiSend('Give me the optimal solution with explanation');
+                  }}
+                  className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-medium text-sm transition-all shadow-lg shadow-purple-900/30 flex items-center justify-center gap-2"
+                >
+                  <Sparkles size={14} />
+                  Ask AI First
+                </button>
+                <button
+                  onClick={() => {
+                    setShowSaveConfirm(false);
+                    handleSaveNotes(true);
+                  }}
+                  className="flex-1 px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium text-sm transition-all shadow-lg shadow-emerald-900/30"
+                >
+                  Save Notes Only
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* File Exists Modal */}
+      <AnimatePresence>
+        {showFileExistsModal && pendingSaveData && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50"
+            onClick={() => handleFileExistsAction('cancel')}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-[#161616] border border-[#333] rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Icon */}
+              <div className="w-14 h-14 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-4">
+                <FileJson size={24} className="text-blue-400" />
+              </div>
+
+              {/* Title */}
+              <h3 className="text-xl font-bold text-white text-center mb-2">
+                File Already Exists
+              </h3>
+
+              {/* File name display */}
+              <div className="bg-[#0a0a0a] rounded-lg px-3 py-2 mb-4 border border-[#262626]">
+                <p className="text-cyan-400 text-sm font-mono text-center truncate">
+                  {pendingSaveData.fileName}
+                </p>
+              </div>
+
+              {/* Description */}
+              <p className="text-gray-400 text-center text-sm mb-6 leading-relaxed">
+                This problem already has saved notes. What would you like to do?
+              </p>
+
+              {/* Buttons */}
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => handleFileExistsAction('append')}
+                  className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium text-sm transition-all shadow-lg shadow-emerald-900/30 flex items-center justify-center gap-2"
+                >
+                  <span className="text-emerald-200">+</span>
+                  Append to Existing
+                </button>
+                <button
+                  onClick={() => handleFileExistsAction('replace')}
+                  className="w-full px-4 py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2"
+                >
+                  <span className="text-orange-200">↻</span>
+                  Replace Everything
+                </button>
+                <button
+                  onClick={() => handleFileExistsAction('cancel')}
+                  className="w-full px-4 py-3 bg-[#262626] hover:bg-[#333] text-gray-300 hover:text-white rounded-xl font-medium text-sm transition-all border border-[#333]"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };

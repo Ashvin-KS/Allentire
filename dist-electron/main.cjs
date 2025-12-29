@@ -359,6 +359,9 @@ import_electron3.ipcMain.handle("notes:selectVault", async () => {
 });
 function getDirectoryTree(dirPath) {
   const items = [];
+  if (!dirPath || !import_fs.default.existsSync(dirPath)) {
+    return items;
+  }
   try {
     const entries = import_fs.default.readdirSync(dirPath, { withFileTypes: true });
     for (const entry of entries) {
@@ -431,6 +434,16 @@ import_electron3.ipcMain.handle("notes:createFolder", async (_, dirPath, folderN
     return { success: false, error: err.message };
   }
 });
+import_electron3.ipcMain.handle("notes:ensureDir", async (_, dirPath) => {
+  try {
+    if (!import_fs.default.existsSync(dirPath)) {
+      import_fs.default.mkdirSync(dirPath, { recursive: true });
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
 import_electron3.ipcMain.handle("notes:delete", async (_, itemPath) => {
   try {
     const stat = import_fs.default.statSync(itemPath);
@@ -468,6 +481,16 @@ import_electron3.ipcMain.handle("notes:moveFile", async (_, sourcePath, destinat
     return { success: true, newPath };
   } catch (err) {
     return { success: false, error: err.message };
+  }
+});
+import_electron3.ipcMain.handle("leetcode:readCsv", async () => {
+  try {
+    const csvPath = import_path.default.join(import_electron3.app.getAppPath(), "leetcode_problems.csv");
+    if (!import_fs.default.existsSync(csvPath)) return null;
+    return import_fs.default.readFileSync(csvPath, "utf-8");
+  } catch (err) {
+    console.error("Error reading LeetCode CSV:", err);
+    return null;
   }
 });
 import_electron3.ipcMain.handle("google:checkAuth", () => {

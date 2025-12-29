@@ -219,9 +219,13 @@ const TiptapEditor: React.FC<{
 };
 
 export const BrainView: React.FC = () => {
-  const [vaultPath, setVaultPath] = useState<string>(DEFAULT_VAULT);
+  const [vaultPath, setVaultPath] = useState<string>(() => {
+    return localStorage.getItem('brain_vaultPath') || DEFAULT_VAULT;
+  });
   const [fileTree, setFileTree] = useState<FileNode[]>([]);
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<string | null>(() => {
+    return localStorage.getItem('brain_selectedFile');
+  });
   const [fileContent, setFileContent] = useState<string>('');
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
@@ -403,6 +407,10 @@ export const BrainView: React.FC = () => {
   // Load file tree on mount
   useEffect(() => {
     loadFileTree();
+    // If we have a selected file, load it
+    if (selectedFile) {
+      openFile(selectedFile);
+    }
   }, [vaultPath]);
 
   const loadFileTree = async () => {
@@ -428,6 +436,7 @@ export const BrainView: React.FC = () => {
     const content = await window.nexusAPI.notes.readFile(filePath);
     if (content !== null) {
       setSelectedFile(filePath);
+      localStorage.setItem('brain_selectedFile', filePath);
       setFileContent(content);
       setEditContent(content);
       setIsEditing(false);

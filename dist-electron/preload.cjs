@@ -25,7 +25,8 @@ import_electron.contextBridge.exposeInMainWorld("nexusAPI", {
     createFolder: (dirPath, folderName) => import_electron.ipcRenderer.invoke("notes:createFolder", dirPath, folderName),
     delete: (itemPath) => import_electron.ipcRenderer.invoke("notes:delete", itemPath),
     rename: (oldPath, newName) => import_electron.ipcRenderer.invoke("notes:rename", oldPath, newName),
-    moveFile: (sourcePath, destinationPath) => import_electron.ipcRenderer.invoke("notes:moveFile", sourcePath, destinationPath)
+    moveFile: (sourcePath, destinationPath) => import_electron.ipcRenderer.invoke("notes:moveFile", sourcePath, destinationPath),
+    ensureDir: (dirPath) => import_electron.ipcRenderer.invoke("notes:ensureDir", dirPath)
   },
   // ========== GOOGLE API ==========
   google: {
@@ -43,5 +44,9 @@ import_electron.contextBridge.exposeInMainWorld("nexusAPI", {
       update: (tasklistId, taskId, task) => import_electron.ipcRenderer.invoke("google:tasks:update", tasklistId, taskId, task),
       delete: (tasklistId, taskId) => import_electron.ipcRenderer.invoke("google:tasks:delete", tasklistId, taskId)
     }
+  },
+  // ========== LEETCODE API ==========
+  leetcode: {
+    readCsv: () => import_electron.ipcRenderer.invoke("leetcode:readCsv")
   }
 });

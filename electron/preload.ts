@@ -53,6 +53,9 @@ contextBridge.exposeInMainWorld('nexusAPI', {
 
         moveFile: (sourcePath: string, destinationPath: string): Promise<{ success: boolean; newPath?: string; error?: string }> =>
             ipcRenderer.invoke('notes:moveFile', sourcePath, destinationPath),
+
+        ensureDir: (dirPath: string): Promise<{ success: boolean; error?: string }> =>
+            ipcRenderer.invoke('notes:ensureDir', dirPath),
     },
 
     // ========== GOOGLE API ==========
@@ -72,6 +75,11 @@ contextBridge.exposeInMainWorld('nexusAPI', {
             update: (tasklistId: string | undefined, taskId: string, task: any): Promise<boolean> => ipcRenderer.invoke('google:tasks:update', tasklistId, taskId, task),
             delete: (tasklistId: string | undefined, taskId: string): Promise<boolean> => ipcRenderer.invoke('google:tasks:delete', tasklistId, taskId)
         }
+    },
+
+    // ========== LEETCODE API ==========
+    leetcode: {
+        readCsv: (): Promise<string | null> => ipcRenderer.invoke('leetcode:readCsv'),
     }
 });
 
@@ -92,6 +100,10 @@ declare global {
                 delete: (itemPath: string) => Promise<{ success: boolean; error?: string }>;
                 rename: (oldPath: string, newName: string) => Promise<{ success: boolean; newPath?: string; error?: string }>;
                 moveFile: (sourcePath: string, destinationPath: string) => Promise<{ success: boolean; newPath?: string; error?: string }>;
+                ensureDir: (dirPath: string) => Promise<{ success: boolean; error?: string }>;
+            };
+            leetcode: {
+                readCsv: () => Promise<string | null>;
             };
             google: {
                 checkAuth: () => Promise<boolean>;
