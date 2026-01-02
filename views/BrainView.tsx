@@ -51,24 +51,25 @@ interface FileNode {
 }
 
 // Unified Styles Configuration
+// Unified Styles Configuration
 const MARKDOWN_STYLES = {
-  h1: "text-3xl font-bold text-white mt-8 mb-4",
-  h2: "text-2xl font-bold text-white mt-8 mb-4",
-  h3: "text-xl font-semibold text-white mt-6 mb-3",
-  h4: "text-lg font-semibold text-white mt-6 mb-2",
-  h5: "text-base font-semibold text-white mt-4 mb-2",
-  h6: "text-sm font-semibold text-gray-300 mt-4 mb-2",
-  p: "text-gray-300 my-3 leading-relaxed",
-  ul: "list-disc list-inside text-gray-300 my-3 space-y-1 ml-4",
-  ol: "list-decimal list-inside text-gray-300 my-3 space-y-1 ml-4",
-  li: "text-gray-300",
+  h1: "text-3xl font-bold text-white mt-6 mb-3",
+  h2: "text-2xl font-bold text-white mt-6 mb-3",
+  h3: "text-xl font-semibold text-white mt-4 mb-2",
+  h4: "text-lg font-semibold text-white mt-4 mb-2",
+  h5: "text-base font-semibold text-white mt-3 mb-1",
+  h6: "text-sm font-semibold text-gray-300 mt-3 mb-1",
+  p: "text-gray-300 my-2 leading-relaxed",
+  ul: "list-disc list-inside text-gray-300 my-2 space-y-1 ml-1",
+  ol: "list-decimal list-inside text-gray-300 my-2 space-y-1 ml-1",
+  li: "text-gray-300 pl-1",
   codeInline: "bg-[#262626] px-1.5 py-0.5 rounded text-purple-300 text-sm font-mono",
-  codeBlock: "bg-[#1a1a1a] p-4 rounded-lg overflow-x-auto text-sm my-4 border border-[#333] text-gray-300 font-mono",
+  codeBlock: "bg-[#1a1a1a] p-4 rounded-lg overflow-x-auto text-sm my-3 border border-[#333] text-gray-300 font-mono",
   a: "text-blue-400 hover:underline cursor-pointer",
-  blockquote: "border-l-4 border-purple-500 pl-4 text-gray-400 my-4 italic",
-  hr: "border-[#333] my-6",
-  img: "max-w-full rounded-lg my-4",
-  table: "w-full border-collapse text-sm my-4",
+  blockquote: "border-l-4 border-purple-500 pl-4 text-gray-400 my-3 italic",
+  hr: "border-[#333] my-4",
+  img: "max-w-full rounded-lg my-3",
+  table: "w-full border-collapse text-sm my-3",
   th: "text-left px-3 py-2 text-gray-200 font-semibold border-b border-[#333]",
   td: "px-3 py-2 text-gray-300 border-b border-[#262626]",
   tr: "hover:bg-[#1a1a1a]"
@@ -138,8 +139,17 @@ const TiptapEditor: React.FC<{
       Image.configure({
         HTMLAttributes: { class: MARKDOWN_STYLES.img },
       }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
+      TaskList.configure({
+        HTMLAttributes: {
+          class: 'task-list pl-0 list-none',
+        },
+      }),
+      TaskItem.configure({
+        nested: true,
+        HTMLAttributes: {
+          class: 'task-item flex items-start gap-2',
+        },
+      }),
       Markdown.configure({
         html: false,
         transformPastedText: true,
@@ -387,16 +397,19 @@ export const BrainView: React.FC = () => {
         const data = await response.json();
         if (data.data && Array.isArray(data.data)) {
           setAvailableModels(data.data);
-          // Set default model to first one if not already set
-          if (!selectedModel && data.data.length > 0) {
+          // Set default model - prefer provider-5/gpt-oss-120b like CodeView
+          const hasTargetModel = data.data.some((m: any) => m.id === 'provider-5/gpt-oss-120b');
+          if (hasTargetModel) {
+            setSelectedModel('provider-5/gpt-oss-120b');
+          } else if (data.data.length > 0) {
             setSelectedModel(data.data[0].id);
           }
         }
       } catch (error) {
         console.error('Failed to fetch models:', error);
-        // Fallback to a default
-        setAvailableModels([{ id: 'gpt-4o-mini', name: 'GPT-4o Mini' }]);
-        setSelectedModel('gpt-4o-mini');
+        // Fallback to the same default
+        setAvailableModels([{ id: 'provider-5/gpt-oss-120b', name: 'GPT-OSS 120B' }]);
+        setSelectedModel('provider-5/gpt-oss-120b');
       } finally {
         setModelsLoading(false);
       }
@@ -455,6 +468,37 @@ export const BrainView: React.FC = () => {
       setFileContent(editContent);
       setIsEditing(false);
     }
+  };
+
+  // Handle checkbox toggle in read mode
+  const handleCheckboxToggle = async (lineIndex: number, checked: boolean) => {
+    if (!selectedFile || !window.nexusAPI?.notes) return;
+
+    // Optimistic Update: Update UI immediately
+    const lines = fileContent.split('\n');
+    if (lineIndex < 0 || lineIndex >= lines.length) return;
+
+    const line = lines[lineIndex];
+    let newLine: string;
+
+    // Toggle carefully using regex to preserve other text
+    if (checked) {
+      // Replace first occurrence of [ ] with [x]
+      newLine = line.replace(/\[([ ])\]/, '[x]');
+    } else {
+      // Replace first occurrence of [x] or [X] with [ ]
+      newLine = line.replace(/\[([xX])\]/, '[ ]');
+    }
+
+    lines[lineIndex] = newLine;
+    const newContent = lines.join('\n');
+
+    // Update State Instantly
+    setFileContent(newContent);
+    setEditContent(newContent);
+
+    // Save to disk in background
+    await window.nexusAPI.notes.writeFile(selectedFile, newContent);
   };
 
   const createNewFile = async () => {
@@ -983,7 +1027,7 @@ ${noteContext}`;
                   onMouseUp={handleMouseUp}
                   className="prose prose-invert max-w-none w-full px-4 sm:px-8 pb-8 pt-4 cursor-auto select-text"
                 >
-                  <MarkdownRenderer content={fileContent} />
+                  <MarkdownRenderer content={fileContent} onCheckboxToggle={handleCheckboxToggle} />
                 </div>
               )}
             </div>
@@ -1353,7 +1397,12 @@ const FileTreeItemReal: React.FC<FileTreeItemRealProps> = ({
 };
 
 // Markdown Renderer using react-markdown
-const MarkdownRenderer: React.FC<{ content: string }> = ({ content }) => {
+interface MarkdownRendererProps {
+  content: string;
+  onCheckboxToggle?: (lineIndex: number, checked: boolean) => void;
+}
+
+const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, onCheckboxToggle }) => {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -1369,10 +1418,60 @@ const MarkdownRenderer: React.FC<{ content: string }> = ({ content }) => {
         // Paragraphs
         p: ({ children }) => <p className={MARKDOWN_STYLES.p}>{children}</p>,
 
-        // Lists
-        ul: ({ children }) => <ul className={MARKDOWN_STYLES.ul}>{children}</ul>,
+        // Lists - detect if contains task items
+        ul: ({ children, node, ...props }) => {
+          // @ts-ignore
+          const hasTaskItems = node?.children?.some((child: any) => typeof child?.checked === 'boolean');
+          if (hasTaskItems) {
+            return <ul className="list-none p-0 m-0" {...props}>{children}</ul>;
+          }
+          return <ul className={MARKDOWN_STYLES.ul} {...props}>{children}</ul>;
+        },
         ol: ({ children }) => <ol className={MARKDOWN_STYLES.ol}>{children}</ol>,
-        li: ({ children }) => <li className={MARKDOWN_STYLES.li}>{children}</li>,
+
+        // List items with checkbox support  
+        li: ({ children, node, ...props }) => {
+          // @ts-ignore
+          const isTaskItem = typeof node?.checked === 'boolean';
+
+          if (isTaskItem) {
+            // @ts-ignore
+            const isChecked = node.checked;
+            // @ts-ignore
+            const lineNumber = node?.position?.start?.line ? node.position.start.line - 1 : -1;
+
+            return (
+              <li
+                className="flex items-center gap-2 py-[2px] cursor-pointer list-none"
+                onClick={() => {
+                  if (onCheckboxToggle && lineNumber >= 0) {
+                    onCheckboxToggle(lineNumber, !isChecked);
+                  }
+                }}
+                {...props}
+              >
+                <span className={`
+                  w-4 h-4 rounded-sm border flex-shrink-0 flex items-center justify-center
+                  ${isChecked
+                    ? 'bg-blue-500 border-blue-500'
+                    : 'border-gray-500 bg-transparent hover:border-blue-400'
+                  }
+                `}>
+                  {isChecked && (
+                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </span>
+                <span className={`leading-tight [&>p]:m-0 [&>p]:inline ${isChecked ? 'line-through text-gray-500' : 'text-gray-300'}`}>
+                  {children}
+                </span>
+              </li>
+            );
+          }
+
+          return <li className={MARKDOWN_STYLES.li} {...props}>{children}</li>;
+        },
 
         // Code
         code: ({ className, children, ...props }) => {
@@ -1442,7 +1541,13 @@ const ChatBubble: React.FC<{ sender: 'ai' | 'user'; text: string; context?: stri
   // Parse for <think> tags
   const thinkMatch = text.match(/<think>([\s\S]*?)<\/think>/);
   const thinkContent = thinkMatch ? thinkMatch[1] : null;
-  const cleanText = text.replace(/<think>[\s\S]*?<\/think>/, '').trim();
+
+  // Remove <think> tags and JSON action blocks from display
+  let cleanText = text.replace(/<think>[\s\S]*?<\/think>/, '').trim();
+  // Remove ```json ... ``` blocks (edit mode actions)
+  cleanText = cleanText.replace(/```json[\s\S]*?```/g, '').trim();
+  // Remove loose JSON objects that look like actions
+  cleanText = cleanText.replace(/\{\s*"action"[\s\S]*?\}\s*$/g, '').trim();
 
   return (
     <div className={`flex flex-col ${sender === 'user' ? 'items-end' : 'items-start'} max-w-[95%]`}>

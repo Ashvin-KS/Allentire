@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { useLeetCodeActivityStore } from './useLeetCodeActivityStore';
 
 export interface Problem {
     id: string;
@@ -11,6 +12,7 @@ export interface Problem {
     lastPracticed?: string;
     category?: string;
     technique?: string;
+    solvedDate?: string; // Track when it was solved
 }
 
 interface CodeState {
@@ -58,11 +60,32 @@ export const useCodeStore = create<CodeState>()(
                 problems: state.problems.filter((p) => p.id !== id)
             })),
 
-            toggleSolved: (id) => set((state) => ({
-                problems: state.problems.map((p) =>
-                    p.id === id ? { ...p, isSolved: !p.isSolved } : p
-                )
-            })),
+            toggleSolved: (id) => {
+                const state = useCodeStore.getState();
+                const problem = state.problems.find(p => p.id === id);
+                if (!problem) return;
+
+                const willBeSolved = !problem.isSolved;
+                const today = new Date().toISOString().split('T')[0];
+
+                // Update activity tracker for heatmap
+                const activityStore = useLeetCodeActivityStore.getState();
+                if (willBeSolved) {
+                    activityStore.recordSolve(id);
+                } else {
+                    activityStore.unrecordSolve(id);
+                }
+
+                set({
+                    problems: state.problems.map((p) =>
+                        p.id === id ? {
+                            ...p,
+                            isSolved: willBeSolved,
+                            solvedDate: willBeSolved ? today : undefined
+                        } : p
+                    )
+                });
+            },
 
             updateNotes: (id, notes) => set((state) => ({
                 problems: state.problems.map((p) =>
